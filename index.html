@@ -1,7 +1,47 @@
+<!DOCTYPE html>
 <html>
-    <head>
-    </head>
-    <body>
-        Github Pages Sample
-    </body>
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/webxr/VRButton.js"></script>
+</head>
+<body>
+    <script>
+        // シーン、カメラ、レンダラーを作成
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        document.body.appendChild(THREE.VRButton.createButton(renderer));
+        
+        // 左目用の画像
+        const leftGeometry = new THREE.PlaneGeometry(2, 2);
+        const leftTexture = new THREE.TextureLoader().load('left-image.jpg');
+        const leftMaterial = new THREE.MeshBasicMaterial({ map: leftTexture });
+        const leftPlane = new THREE.Mesh(leftGeometry, leftMaterial);
+        leftPlane.layers.set(1); // レイヤー1は左目専用
+        leftPlane.position.z = -3;
+        scene.add(leftPlane);
+        
+        // 右目用の画像
+        const rightGeometry = new THREE.PlaneGeometry(2, 2);
+        const rightTexture = new THREE.TextureLoader().load('right-image.jpg');
+        const rightMaterial = new THREE.MeshBasicMaterial({ map: rightTexture });
+        const rightPlane = new THREE.Mesh(rightGeometry, rightMaterial);
+        rightPlane.layers.set(2); // レイヤー2は右目専用
+        rightPlane.position.z = -3;
+        scene.add(rightPlane);
+        
+        // カメラのレイヤー設定
+        camera.layers.enable(1); // 左目レイヤー
+        camera.layers.enable(2); // 右目レイヤー
+        
+        // アニメーションループ
+        renderer.setAnimationLoop(() => {
+            renderer.render(scene, camera);
+        });
+    </script>
+</body>
 </html>
