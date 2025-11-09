@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quest 3 Stereo Image Viewer</title>
+    <title>Quest 3 Stereo Image Viewer - Immersive</title>
     <style>
         body { 
             margin: 0; 
@@ -37,7 +37,6 @@
 
         // シーン設定
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x000000);
         
         // カメラ設定
         const camera = new THREE.PerspectiveCamera(
@@ -60,29 +59,28 @@
         // テクスチャローダー
         const loader = new THREE.TextureLoader();
         
-        // 左目用の画像
+        // 左目用の球体（半径を大きくして没入感アップ）
         const leftTexture = loader.load('left-image.jpg');
-        const leftGeometry = new THREE.PlaneGeometry(4, 3);
+        const leftGeometry = new THREE.SphereGeometry(500, 60, 40);
+        // 球体を裏返して内側から見えるようにする
+        leftGeometry.scale(-1, 1, 1);
         const leftMaterial = new THREE.MeshBasicMaterial({ 
-            map: leftTexture,
-            side: THREE.DoubleSide
+            map: leftTexture
         });
-        const leftPlane = new THREE.Mesh(leftGeometry, leftMaterial);
-        leftPlane.position.z = -5;
-        leftPlane.layers.set(1); // 左目専用レイヤー
-        scene.add(leftPlane);
+        const leftSphere = new THREE.Mesh(leftGeometry, leftMaterial);
+        leftSphere.layers.set(1); // 左目専用レイヤー
+        scene.add(leftSphere);
         
-        // 右目用の画像
+        // 右目用の球体
         const rightTexture = loader.load('right-image.jpg');
-        const rightGeometry = new THREE.PlaneGeometry(4, 3);
+        const rightGeometry = new THREE.SphereGeometry(500, 60, 40);
+        rightGeometry.scale(-1, 1, 1);
         const rightMaterial = new THREE.MeshBasicMaterial({ 
-            map: rightTexture,
-            side: THREE.DoubleSide
+            map: rightTexture
         });
-        const rightPlane = new THREE.Mesh(rightGeometry, rightMaterial);
-        rightPlane.position.z = -5;
-        rightPlane.layers.set(2); // 右目専用レイヤー
-        scene.add(rightPlane);
+        const rightSphere = new THREE.Mesh(rightGeometry, rightMaterial);
+        rightSphere.layers.set(2); // 右目専用レイヤー
+        scene.add(rightSphere);
         
         // ウィンドウリサイズ対応
         window.addEventListener('resize', () => {
@@ -92,21 +90,16 @@
         });
         
         // レンダリング前のコールバック
-        // これが重要：各目のレンダリング前にカメラのレイヤーを切り替える
         renderer.xr.addEventListener('sessionstart', () => {
             const xrCamera = renderer.xr.getCamera();
-            
-            // カメラの配列を取得（左目と右目）
             const cameras = xrCamera.cameras;
             
             if (cameras.length === 2) {
-                // 左目のカメラ（通常0番目）
-                cameras[0].layers.disableAll(); // 全レイヤーを無効化
-                cameras[0].layers.enable(1);    // レイヤー1のみ有効化（左目用）
+                cameras[0].layers.disableAll();
+                cameras[0].layers.enable(1);
                 
-                // 右目のカメラ（通常1番目）
-                cameras[1].layers.disableAll(); // 全レイヤーを無効化
-                cameras[1].layers.enable(2);    // レイヤー2のみ有効化（右目用）
+                cameras[1].layers.disableAll();
+                cameras[1].layers.enable(2);
             }
         });
         
