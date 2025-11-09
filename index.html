@@ -3,11 +3,12 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quest 3 Stereo Image Viewer - Immersive</title>
+    <title>Quest 3 Stereo 3D Viewer</title>
     <style>
         body { 
             margin: 0; 
             overflow: hidden;
+            background: black;
         }
         canvas { 
             width: 100%; 
@@ -28,7 +29,8 @@
 </head>
 <body>
     <div id="info">
-        Quest 3でVRボタンを押してください
+        Quest 3でVRボタンを押してください<br>
+        左右の目で異なる画像を見ることで立体視できます
     </div>
     
     <script type="module">
@@ -37,10 +39,11 @@
 
         // シーン設定
         const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
         
         // カメラ設定
         const camera = new THREE.PerspectiveCamera(
-            75, 
+            90,  // 視野角を広くして没入感アップ
             window.innerWidth / window.innerHeight, 
             0.1, 
             1000
@@ -59,28 +62,42 @@
         // テクスチャローダー
         const loader = new THREE.TextureLoader();
         
-        // 左目用の球体（半径を大きくして没入感アップ）
-        const leftTexture = loader.load('left-image.jpg');
-        const leftGeometry = new THREE.SphereGeometry(500, 60, 40);
-        // 球体を裏返して内側から見えるようにする
-        leftGeometry.scale(-1, 1, 1);
-        const leftMaterial = new THREE.MeshBasicMaterial({ 
-            map: leftTexture
-        });
-        const leftSphere = new THREE.Mesh(leftGeometry, leftMaterial);
-        leftSphere.layers.set(1); // 左目専用レイヤー
-        scene.add(leftSphere);
+        // 画像のアスペクト比に応じてサイズを調整
+        // 例：16:9の画像なら width=8, height=4.5
+        const imageWidth = 8;
+        const imageHeight = 4.5;
+        const distance = 5; // 目からの距離
         
-        // 右目用の球体
-        const rightTexture = loader.load('right-image2.jpg');
-        const rightGeometry = new THREE.SphereGeometry(500, 60, 40);
-        rightGeometry.scale(-1, 1, 1);
-        const rightMaterial = new THREE.MeshBasicMaterial({ 
-            map: rightTexture
+        // 左目用の画像（左から撮った写真）
+        const leftTexture = loader.load('left.jpg');
+        const leftGeometry = new THREE.PlaneGeometry(imageWidth, imageHeight);
+        const leftMaterial = new THREE.MeshBasicMaterial({ 
+            map: leftTexture,
+            side: THREE.DoubleSide
         });
-        const rightSphere = new THREE.Mesh(rightGeometry, rightMaterial);
-        rightSphere.layers.set(2); // 右目専用レイヤー
-        scene.add(rightSphere);
+        const leftPlane = new THREE.Mesh(leftGeometry, leftMaterial);
+        leftPlane.position.set(0, 0, -distance);
+        leftPlane.layers.set(1); // 左目専用レイヤー
+        scene.add(leftPlane);
+        
+        // 右目用の画像（右から撮った写真）
+        const rightTexture = loader.load('right.jpg');
+        const rightGeometry = new THREE.PlaneGeometry(imageWidth, imageHeight);
+        const rightMaterial = new THREE.MeshBasicMaterial({ 
+            map: rightTexture,
+            side: THREE.DoubleSide
+        });
+        const rightPlane = new THREE.Mesh(rightGeometry, rightMaterial);
+        rightPlane.position.set(0, 0, -distance);
+        rightPlane.layers.set(2); // 右目専用レイヤー
+        scene.add(rightPlane);
+        
+        // 参考用：立体感を確認するための赤い球を追加（オプション）
+        // const sphereGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+        // const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        // const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        // sphere.position.set(0, 0, -3); // 画像より手前に配置
+        // scene.add(sphere);
         
         // ウィンドウリサイズ対応
         window.addEventListener('resize', () => {
@@ -95,9 +112,11 @@
             const cameras = xrCamera.cameras;
             
             if (cameras.length === 2) {
+                // 左目のカメラ
                 cameras[0].layers.disableAll();
                 cameras[0].layers.enable(1);
                 
+                // 右目のカメラ
                 cameras[1].layers.disableAll();
                 cameras[1].layers.enable(2);
             }
