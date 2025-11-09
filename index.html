@@ -84,16 +84,30 @@
         rightPlane.layers.set(2); // 右目専用レイヤー
         scene.add(rightPlane);
         
-        // カメラのレイヤー設定
-        camera.layers.enable(0); // デフォルトレイヤー
-        camera.layers.enable(1); // 左目レイヤー
-        camera.layers.enable(2); // 右目レイヤー
-        
         // ウィンドウリサイズ対応
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // レンダリング前のコールバック
+        // これが重要：各目のレンダリング前にカメラのレイヤーを切り替える
+        renderer.xr.addEventListener('sessionstart', () => {
+            const xrCamera = renderer.xr.getCamera();
+            
+            // カメラの配列を取得（左目と右目）
+            const cameras = xrCamera.cameras;
+            
+            if (cameras.length === 2) {
+                // 左目のカメラ（通常0番目）
+                cameras[0].layers.disableAll(); // 全レイヤーを無効化
+                cameras[0].layers.enable(1);    // レイヤー1のみ有効化（左目用）
+                
+                // 右目のカメラ（通常1番目）
+                cameras[1].layers.disableAll(); // 全レイヤーを無効化
+                cameras[1].layers.enable(2);    // レイヤー2のみ有効化（右目用）
+            }
         });
         
         // アニメーションループ
