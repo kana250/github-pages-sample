@@ -1,42 +1,100 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/webxr/VRButton.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quest 3 Stereo Image Viewer</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden;
+        }
+        canvas { 
+            width: 100%; 
+            height: 100%; 
+            display: block;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
 </head>
 <body>
-    <script>
-        // シーン、カメラ、レンダラーを作成
+    <div id="info">
+        Quest 3でVRボタンを押してください
+    </div>
+    
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+        import { VRButton } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/VRButton.js';
+
+        // シーン設定
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
+        scene.background = new THREE.Color(0x000000);
         
+        // カメラ設定
+        const camera = new THREE.PerspectiveCamera(
+            75, 
+            window.innerWidth / window.innerHeight, 
+            0.1, 
+            1000
+        );
+        camera.position.set(0, 0, 0);
+        
+        // レンダラー設定
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
-        document.body.appendChild(THREE.VRButton.createButton(renderer));
+        
+        // VRボタンを追加
+        document.body.appendChild(VRButton.createButton(renderer));
+        
+        // テクスチャローダー
+        const loader = new THREE.TextureLoader();
         
         // 左目用の画像
-        const leftGeometry = new THREE.PlaneGeometry(2, 2);
-        const leftTexture = new THREE.TextureLoader().load('left-image.jpg');
-        const leftMaterial = new THREE.MeshBasicMaterial({ map: leftTexture });
+        const leftTexture = loader.load('left-image.jpg');
+        const leftGeometry = new THREE.PlaneGeometry(4, 3);
+        const leftMaterial = new THREE.MeshBasicMaterial({ 
+            map: leftTexture,
+            side: THREE.DoubleSide
+        });
         const leftPlane = new THREE.Mesh(leftGeometry, leftMaterial);
-        leftPlane.layers.set(1); // レイヤー1は左目専用
-        leftPlane.position.z = -3;
+        leftPlane.position.z = -5;
+        leftPlane.layers.set(1); // 左目専用レイヤー
         scene.add(leftPlane);
         
         // 右目用の画像
-        const rightGeometry = new THREE.PlaneGeometry(2, 2);
-        const rightTexture = new THREE.TextureLoader().load('right-image.jpg');
-        const rightMaterial = new THREE.MeshBasicMaterial({ map: rightTexture });
+        const rightTexture = loader.load('right-image.jpg');
+        const rightGeometry = new THREE.PlaneGeometry(4, 3);
+        const rightMaterial = new THREE.MeshBasicMaterial({ 
+            map: rightTexture,
+            side: THREE.DoubleSide
+        });
         const rightPlane = new THREE.Mesh(rightGeometry, rightMaterial);
-        rightPlane.layers.set(2); // レイヤー2は右目専用
-        rightPlane.position.z = -3;
+        rightPlane.position.z = -5;
+        rightPlane.layers.set(2); // 右目専用レイヤー
         scene.add(rightPlane);
         
         // カメラのレイヤー設定
+        camera.layers.enable(0); // デフォルトレイヤー
         camera.layers.enable(1); // 左目レイヤー
         camera.layers.enable(2); // 右目レイヤー
+        
+        // ウィンドウリサイズ対応
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
         
         // アニメーションループ
         renderer.setAnimationLoop(() => {
