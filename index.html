@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quest 3 Stereo 3D Viewer</title>
+    <title>Quest 3 Stereo WebSocket Viewer</title>
     <style>
         body { 
             margin: 0; 
@@ -20,84 +20,196 @@
             top: 10px;
             left: 10px;
             color: white;
-            background: rgba(0,0,0,0.7);
-            padding: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
             border-radius: 5px;
             font-family: Arial, sans-serif;
+            max-width: 400px;
+            z-index: 1000;
         }
+        .status {
+            margin: 5px 0;
+        }
+        .connected { color: #4CAF50; }
+        .disconnected { color: #f44336; }
+        .connecting { color: #FFC107; }
     </style>
 </head>
 <body>
     <div id="info">
-        Quest 3でVRボタンを押してください<br>
-        左右の目で異なる画像を見ることで立体視できます
+        <div class="status">
+            接続状態: <span id="status" class="connecting">接続中...</span>
+        </div>
+        <div class="status">
+            受信画像数: <span id="count">0</span>
+        </div>
+        <div class="status">
+            <small>WebSocketサーバー: <span id="server-url">-</span></small>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px;">
+            VRボタンを押してください
+        </div>
     </div>
     
     <script type="module">
         import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
         import { VRButton } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/VRButton.js';
 
-        // シーン設定
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x000000);
+        // WebSocketサーバーのURL（環境に応じて変更）
+        const urlParams = new URLSearchParams(window.location.search);
+        const wsUrl = urlParams.get('ws') || 'ws://localhost:8080';
         
-        // カメラ設定
+        document.getElementById('server-url').textContent = wsUrl;
+
+        // Three.jsの初期化
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x101010);
+        
         const camera = new THREE.PerspectiveCamera(
-            90,  // 視野角を広くして没入感アップ
+            90,
             window.innerWidth / window.innerHeight, 
             0.1, 
             1000
         );
         camera.position.set(0, 0, 0);
         
-        // レンダラー設定
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
         
-        // VRボタンを追加
         document.body.appendChild(VRButton.createButton(renderer));
         
-        // テクスチャローダー
-        const loader = new THREE.TextureLoader();
-        
-        // 画像のアスペクト比に応じてサイズを調整
-        // 例：16:9の画像なら width=8, height=4.5
+        // 画像表示用の設定
         const imageWidth = 8;
         const imageHeight = 4.5;
-        const distance = 5; // 目からの距離
+        const distance = 5;
         
-        // 左目用の画像（左から撮った写真）
-        const leftTexture = loader.load('left.jpg');
+        // 左目用
         const leftGeometry = new THREE.PlaneGeometry(imageWidth, imageHeight);
         const leftMaterial = new THREE.MeshBasicMaterial({ 
-            map: leftTexture,
+            color: 0x404040,
             side: THREE.DoubleSide
         });
         const leftPlane = new THREE.Mesh(leftGeometry, leftMaterial);
         leftPlane.position.set(0, 0, -distance);
-        leftPlane.layers.set(1); // 左目専用レイヤー
+        leftPlane.layers.set(1);
         scene.add(leftPlane);
         
-        // 右目用の画像（右から撮った写真）
-        const rightTexture = loader.load('right.jpg');
+        // 右目用
         const rightGeometry = new THREE.PlaneGeometry(imageWidth, imageHeight);
         const rightMaterial = new THREE.MeshBasicMaterial({ 
-            map: rightTexture,
+            color: 0x404040,
             side: THREE.DoubleSide
         });
         const rightPlane = new THREE.Mesh(rightGeometry, rightMaterial);
         rightPlane.position.set(0, 0, -distance);
-        rightPlane.layers.set(2); // 右目専用レイヤー
+        rightPlane.layers.set(2);
         scene.add(rightPlane);
         
-        // 参考用：立体感を確認するための赤い球を追加（オプション）
-        // const sphereGeometry = new THREE.SphereGeometry(0.3, 32, 32);
-        // const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        // const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-        // sphere.position.set(0, 0, -3); // 画像より手前に配置
-        // scene.add(sphere);
+        // WebSocket接続
+        let ws;
+        let reconnectInterval;
+        let imageCount = 0;
+        
+        function updateStatus(status, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = status;
+            statusEl.className = className;
+        }
+        
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    console.log('WebSocket接続成功');
+                    updateStatus('接続済み', 'connected');
+                    clearInterval(reconnectInterval);
+                };
+                
+                ws.onmessage = (event) => {
+                    handleMessage(event.data);
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('WebSocketエラー:', error);
+                    updateStatus('エラー', 'disconnected');
+                };
+                
+                ws.onclose = () => {
+                    console.log('WebSocket接続切断');
+                    updateStatus('切断済み', 'disconnected');
+                    
+                    // 5秒後に再接続を試みる
+                    reconnectInterval = setTimeout(() => {
+                        updateStatus('再接続中...', 'connecting');
+                        connectWebSocket();
+                    }, 5000);
+                };
+            } catch (error) {
+                console.error('WebSocket接続失敗:', error);
+                updateStatus('接続失敗', 'disconnected');
+            }
+        }
+        
+        // メッセージ処理
+        function handleMessage(data) {
+            try {
+                // JSONメッセージの場合
+                const message = JSON.parse(data);
+                
+                if (message.type === 'stereo_images') {
+                    updateImages(message.left, message.right);
+                    imageCount++;
+                    document.getElementById('count').textContent = imageCount;
+                } else if (message.type === 'single_image') {
+                    // 両目に同じ画像を表示
+                    updateImages(message.image, message.image);
+                    imageCount++;
+                    document.getElementById('count').textContent = imageCount;
+                }
+            } catch (e) {
+                // バイナリデータやその他の形式の場合
+                console.log('非JSON形式のデータを受信:', e);
+            }
+        }
+        
+        // 画像を更新
+        const loader = new THREE.TextureLoader();
+        
+        function updateImages(leftData, rightData) {
+            // 左目の画像を更新
+            loader.load(leftData, 
+                (texture) => {
+                    leftMaterial.map = texture;
+                    leftMaterial.color.set(0xffffff); // 色をリセット
+                    leftMaterial.needsUpdate = true;
+                    console.log('左目画像更新完了');
+                },
+                undefined,
+                (error) => {
+                    console.error('左目画像の読み込みエラー:', error);
+                }
+            );
+            
+            // 右目の画像を更新
+            loader.load(rightData,
+                (texture) => {
+                    rightMaterial.map = texture;
+                    rightMaterial.color.set(0xffffff); // 色をリセット
+                    rightMaterial.needsUpdate = true;
+                    console.log('右目画像更新完了');
+                },
+                undefined,
+                (error) => {
+                    console.error('右目画像の読み込みエラー:', error);
+                }
+            );
+        }
+        
+        // WebSocket接続開始
+        connectWebSocket();
         
         // ウィンドウリサイズ対応
         window.addEventListener('resize', () => {
@@ -106,17 +218,15 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
         
-        // レンダリング前のコールバック
+        // VRモード設定
         renderer.xr.addEventListener('sessionstart', () => {
             const xrCamera = renderer.xr.getCamera();
             const cameras = xrCamera.cameras;
             
             if (cameras.length === 2) {
-                // 左目のカメラ
                 cameras[0].layers.disableAll();
                 cameras[0].layers.enable(1);
                 
-                // 右目のカメラ
                 cameras[1].layers.disableAll();
                 cameras[1].layers.enable(2);
             }
@@ -125,6 +235,13 @@
         // アニメーションループ
         renderer.setAnimationLoop(() => {
             renderer.render(scene, camera);
+        });
+        
+        // ページを閉じる時にWebSocketを閉じる
+        window.addEventListener('beforeunload', () => {
+            if (ws) {
+                ws.close();
+            }
         });
     </script>
 </body>
